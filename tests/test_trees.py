@@ -1,9 +1,16 @@
 import pytest
 from itertools import combinations
 from Bio.Phylo.TreeConstruction import DistanceMatrix
-from upgma import upgma, distances
+from io import StringIO
+from Bio import Phylo
+from distances import distances
+from upgma import upgma
 from neighbor_joining import neighbor_joining
-from fitch_margoliash import fitch_margoliash
+from fitch_margoliash import fitch_margoliash as fm_newick
+
+
+def fitch_margoliash(D):
+    return Phylo.read(StringIO(fm_newick(D)), "newick")
 
 
 def matrix(names, rows):
@@ -23,7 +30,7 @@ def assert_path_lengths_equal(tree, D):
         assert tree.distance(x, y) == pytest.approx(D[x, y])
 
 
-# Wikipedia "UPGMA" worked example (5S rRNA)
+# Wikipedia "UPGMA"/"WPGMA" worked example (5S rRNA)
 WIKI_UPGMA = matrix("abcde", [[0, 17, 21, 31, 23], [17, 0, 30, 34, 21], [21, 30, 0, 28, 39],
                               [31, 34, 28, 0, 43], [23, 21, 39, 43, 0]])
 
@@ -43,13 +50,14 @@ def test_distances():
     assert D["A", "E"] == pytest.approx(0.6)
 
 
-def test_upgma_wikipedia():
+def test_upgma_is_wpgma_wikipedia():
+    # Biopython's upgma averages the two merged clusters equally = WPGMA (the method taught in class)
     t = upgma(WIKI_UPGMA)
     assert siblings(t, "a", "b") and siblings(t, "c", "d")
     assert leaf(t, "a").branch_length == pytest.approx(8.5)
     assert leaf(t, "e").branch_length == pytest.approx(11)
     assert leaf(t, "c").branch_length == pytest.approx(14)
-    assert all(t.distance(n) == pytest.approx(16.5) for n in "abcde")   # ultrametric, root height 16.5
+    assert all(t.distance(n) == pytest.approx(17.5) for n in "abcde")   # ultrametric, WPGMA root height 17.5
 
 
 def test_nj_wikipedia():

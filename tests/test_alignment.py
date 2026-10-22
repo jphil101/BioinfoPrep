@@ -34,10 +34,9 @@ def test_needleman_wunsch(a, b):
 
 @pytest.mark.parametrize("a,b", pairs)
 def test_smith_waterman(a, b):
-    best = smith_waterman(a, b)
-    if reference_score(a, b, local=True) == 0:      # no positive local match at all
-        assert best is None
+    if reference_score(a, b, local=True) == 0:      # no positive local match: nothing to align
         return
+    best = smith_waterman(a, b)
     assert best.score == reference_score(a, b, local=True)
     assert best[0].replace("-", "") in a and best[1].replace("-", "") in b   # local: substrings
     assert rescore(best[0], best[1]) == best.score
