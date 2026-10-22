@@ -1,7 +1,5 @@
 import random
 import pytest
-from needleman_wunsch import needleman_wunsch
-from smith_waterman import smith_waterman
 
 
 def reference_score(a, b, local):
@@ -25,24 +23,28 @@ pairs += [("".join(random.choices("ACGT", k=random.randint(1, 12))),
 
 
 @pytest.mark.parametrize("a,b", pairs)
-def test_needleman_wunsch(a, b):
-    best = needleman_wunsch(a, b)
+def test_needleman_wunsch(run, a, b):
+    best = run("needleman_wunsch.py", a, b, "1 -1 -2")["best"]
     assert best.score == reference_score(a, b, local=False)
     assert best[0].replace("-", "") == a and best[1].replace("-", "") == b   # global: whole sequences used
     assert rescore(best[0], best[1]) == best.score
 
 
 @pytest.mark.parametrize("a,b", pairs)
-def test_smith_waterman(a, b):
+def test_smith_waterman(run, a, b):
     if reference_score(a, b, local=True) == 0:      # no positive local match: nothing to align
         return
-    best = smith_waterman(a, b)
+    best = run("smith_waterman.py", a, b, "1 -1 -2")["best"]
     assert best.score == reference_score(a, b, local=True)
     assert best[0].replace("-", "") in a and best[1].replace("-", "") in b   # local: substrings
     assert rescore(best[0], best[1]) == best.score
 
 
-def test_known_examples():
-    assert needleman_wunsch("GATTACA", "GCATGCU").score == -1
-    sw = smith_waterman("GATTACA", "GCATGCU")
+def test_known_examples(run):
+    assert run("needleman_wunsch.py", "GATTACA", "GCATGCU", "1 -1 -2")["best"].score == -1
+    sw = run("smith_waterman.py", "GATTACA", "GCATGCU", "1 -1 -2")["best"]
     assert (sw[0], sw[1], sw.score) == ("AT", "AT", 2)
+
+
+def test_custom_scores(run):
+    assert run("needleman_wunsch.py", "AC", "AG", "2 -3 -1")["best"].score == 0   # A-A match + 2 gaps beats a -3 mismatch

@@ -1,85 +1,79 @@
 import pytest
 from itertools import combinations
-from Bio.Phylo.TreeConstruction import DistanceMatrix
-from io import StringIO
-from Bio import Phylo
-from distances import distances
-from upgma import upgma
-from neighbor_joining import neighbor_joining
-from fitch_margoliash import fitch_margoliash as fm_newick
+from conftest import tree_sequences
 
 
-def fitch_margoliash(D):
-    return Phylo.read(StringIO(fm_newick(D)), "newick")
-
-
-def matrix(names, rows):
-    return DistanceMatrix(list(names), [r[:i + 1] for i, r in enumerate(rows)])
-
-
-def leaf(tree, name):
-    return next(tree.find_clades(name=name))
+def leaf_lengths(tree):
+    return {c.name: c.branch_length for c in tree.get_terminals()}
 
 
 def siblings(tree, x, y):
     return {c.name for c in tree.common_ancestor(x, y).get_terminals()} == {x, y}
 
 
-def assert_path_lengths_equal(tree, D):
-    for x, y in combinations(D.names, 2):
-        assert tree.distance(x, y) == pytest.approx(D[x, y])
+def assert_paths(tree, edges, L):
+    """Every leaf-to-leaf path in the tree equals the true distance."""
+    for x, y in combinations(sorted({n for e in edges for n in e}), 2):
+        true = sum(k for e, k in edges.items() if (x in e) != (y in e))
+        assert tree.distance(x, y) == pytest.approx(true / L)
 
 
-# Wikipedia "UPGMA"/"WPGMA" worked example (5S rRNA)
-WIKI_UPGMA = matrix("abcde", [[0, 17, 21, 31, 23], [17, 0, 30, 34, 21], [21, 30, 0, 28, 39],
-                              [31, 34, 28, 0, 43], [23, 21, 39, 43, 0]])
-
-# Wikipedia "Neighbor joining" worked example (additive)
-WIKI_NJ = matrix("abcde", [[0, 5, 9, 9, 8], [5, 0, 10, 10, 9], [9, 10, 0, 8, 7],
-                           [9, 10, 8, 0, 3], [8, 9, 7, 3, 0]])
-
-# Mount, Bioinformatics, Fitch-Margoliash worked example
-MOUNT_FM = matrix("ABCD", [[0, 22, 39, 39], [22, 0, 41, 41], [39, 41, 0, 18], [39, 41, 18, 0]])
-
-SEQS = {"A": "ACGTACGTAC", "B": "ACGTACGTTC", "C": "ACGAACGATC", "D": "TCGAACCATC", "E": "TCGTTCCATG"}
+def build(run, script, edges):
+    lines, L = tree_sequences(edges)
+    return run(script, str(len(lines)), *lines)["tree"], L
 
 
-def test_distances():
-    D = distances(SEQS)
-    assert D["A", "B"] == pytest.approx(0.1)   # 1 mismatch in 10
-    assert D["A", "E"] == pytest.approx(0.6)
+# ultrametric tree ((A:2,B:2):3,(C:4,D:4):1) -- UPGMA/WPGMA should recover it exactly
+ULTRA = {"A": 2, "B": 2, "C": 4, "D": 4, "AB": 3, "CD": 1}
+# Wikipedia "Neighbor joining" worked example: a2 b3 c4 d2 e1, internal 3 and 2
+WIKI_NJ = {"a": 2, "b": 3, "c": 4, "d": 2, "e": 1, "ab": 3, "de": 2}
+# Mount, Bioinformatics, Fitch-Margoliash worked example: A10 B12 C9 D9, internal 20
+MOUNT_FM = {"A": 10, "B": 12, "C": 9, "D": 9, "AB": 20}
 
 
-def test_upgma_is_wpgma_wikipedia():
-    # Biopython's upgma averages the two merged clusters equally = WPGMA (the method taught in class)
-    t = upgma(WIKI_UPGMA)
-    assert siblings(t, "a", "b") and siblings(t, "c", "d")
-    assert leaf(t, "a").branch_length == pytest.approx(8.5)
-    assert leaf(t, "e").branch_length == pytest.approx(11)
-    assert leaf(t, "c").branch_length == pytest.approx(14)
-    assert all(t.distance(n) == pytest.approx(17.5) for n in "abcde")   # ultrametric, WPGMA root height 17.5
+def test_distances_are_p_distances(run):
+    g = run("upgma.py", "2", "A ACGTACGTAC", "B ACGTACGTTC")
+    assert g["D"]["A", "B"] == pytest.approx(0.1)          # 1 mismatch in 10
 
 
-def test_nj_wikipedia():
-    t = neighbor_joining(WIKI_NJ)
-    assert {n: leaf(t, n).branch_length for n in "abcde"} == pytest.approx(dict(a=2, b=3, c=4, d=2, e=1))
-    assert_path_lengths_equal(t, WIKI_NJ)                               # additive data recovered exactly
-
-
-def test_fitch_mount():
-    t = fitch_margoliash(MOUNT_FM)
+def test_upgma_ultrametric(run):
+    t, L = build(run, "upgma.py", ULTRA)
     assert siblings(t, "A", "B") and siblings(t, "C", "D")
-    assert {n: leaf(t, n).branch_length for n in "ABCD"} == pytest.approx(dict(A=10, B=12, C=9, D=9))
-    assert t.distance("A", "C") - 10 - 9 == pytest.approx(20)           # internal branch = 20
-    assert_path_lengths_equal(t, MOUNT_FM)
+    assert leaf_lengths(t) == pytest.approx({"A": 2 / L, "B": 2 / L, "C": 4 / L, "D": 4 / L})
+    assert all(t.distance(n) == pytest.approx(5 / L) for n in "ABCD")   # all leaves at height 5
+    assert_paths(t, ULTRA, L)
 
 
-def test_fitch_additive_five_taxa():
-    assert_path_lengths_equal(fitch_margoliash(WIKI_NJ), WIKI_NJ)
+def test_upgma_is_wpgma(run):
+    # Biopython's upgma averages the 2 merged clusters equally (WPGMA, as taught in class).
+    # A,B close; C is 1 away from A,B... D far from C only: WPGMA vs UPGMA differ at the last merge.
+    g = run("upgma.py", "4", "A AAAAAAAAAA", "B AAAAAAAAAT", "C AAAAAAATTT", "D TTTTTTTTTT")
+    t = g["tree"]
+    # merges: (A,B) h=.05 ; (AB,C) d=(.3+.2)/2=.25 -> h=.125 ; (ABC,D): WPGMA d=((1+.9)/2+.7)/2=.825 -> h=.4125
+    assert t.distance("A") == pytest.approx(0.4125)      # true UPGMA would give (1+.9+.7)/3/2 = .4333
 
 
-@pytest.mark.parametrize("method", [upgma, neighbor_joining, fitch_margoliash])
-def test_from_sequences(method):
-    t = method(distances(SEQS))
+def test_nj_wikipedia(run):
+    t, L = build(run, "neighbor_joining.py", WIKI_NJ)
+    assert leaf_lengths(t) == pytest.approx({n: k / L for n, k in WIKI_NJ.items() if len(n) == 1})
+    assert_paths(t, WIKI_NJ, L)
+
+
+def test_fitch_mount(run):
+    t, L = build(run, "fitch_margoliash.py", MOUNT_FM)
+    assert siblings(t, "A", "B") and siblings(t, "C", "D")
+    assert leaf_lengths(t) == pytest.approx({"A": 10 / L, "B": 12 / L, "C": 9 / L, "D": 9 / L})
+    assert_paths(t, MOUNT_FM, L)                          # so internal branch = 20
+
+
+def test_fitch_five_taxa(run):
+    t, L = build(run, "fitch_margoliash.py", WIKI_NJ)
+    assert_paths(t, WIKI_NJ, L)
+
+
+@pytest.mark.parametrize("script", ["upgma.py", "neighbor_joining.py", "fitch_margoliash.py"])
+def test_from_sequences(run, script):
+    seqs = ["A ACGTACGTAC", "B ACGTACGTTC", "C ACGAACGATC", "D TCGAACCATC", "E TCGTTCCATG"]
+    t = run(script, "5", *seqs)["tree"]
     assert sorted(c.name for c in t.get_terminals()) == list("ABCDE")
-    assert siblings(t, "A", "B")                                         # closest pair grouped
+    assert siblings(t, "A", "B")                          # closest pair grouped

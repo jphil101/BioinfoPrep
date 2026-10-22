@@ -1,15 +1,24 @@
 import numpy as np
+from io import StringIO
 from itertools import combinations
+from Bio import Phylo
+from Bio.Phylo.TreeConstruction import DistanceMatrix
 
-def fitch_margoliash(D):      # join closest pair, 3-point formula vs. the rest, repeat
-    d = lambda X, Y: np.mean([D[i, j] for i in X for j in Y])     # avg leaf-to-leaf distance
-    C = {(n,): (n, 0) for n in D.names}                            # cluster -> (newick, avg depth)
-    while len(C) > 2:
-        A, B = min(combinations(C, 2), key=lambda p: d(*p))
-        (na, ha), (nb, hb) = C.pop(A), C.pop(B)
-        R = sum(C, ())                                             # all other leaves
-        a = (d(A, B) + d(A, R) - d(B, R)) / 2
-        b = d(A, B) - a
-        C[A + B] = (f"({na}:{a-ha},{nb}:{b-hb})", (len(A)*a + len(B)*b) / len(A+B))
-    (X, (nx, hx)), (Y, (ny, hy)) = C.items()
-    return f"({nx},{ny}:{d(X, Y)-hx-hy});"                         # Newick tree
+seqs = dict(input("Name and sequence (e.g. A ACGTAC): ").split() for _ in range(int(input("How many sequences? "))))
+names = list(seqs)
+p = lambda s, t: sum(x != y for x, y in zip(s, t)) / len(s)        # p-distance = fraction of mismatches
+D = DistanceMatrix(names, [[p(seqs[a], seqs[b]) for b in names[:i + 1]] for i, a in enumerate(names)])
+
+# join closest pair, 3-point formula vs. the rest, repeat
+d = lambda X, Y: np.mean([D[i, j] for i in X for j in Y])         # avg leaf-to-leaf distance
+C = {(n,): (n, 0) for n in names}                                  # cluster -> (newick, avg depth)
+while len(C) > 2:
+    A, B = min(combinations(C, 2), key=lambda pair: d(*pair))
+    (na, ha), (nb, hb) = C.pop(A), C.pop(B)
+    R = sum(C, ())                                                 # all other leaves
+    a = (d(A, B) + d(A, R) - d(B, R)) / 2
+    b = d(A, B) - a
+    C[A + B] = (f"({na}:{a - ha},{nb}:{b - hb})", (len(A) * a + len(B) * b) / len(A + B))
+(X, (nx, hx)), (Y, (ny, hy)) = C.items()
+tree = Phylo.read(StringIO(f"({nx},{ny}:{d(X, Y) - hx - hy});"), "newick")
+Phylo.draw_ascii(tree)
