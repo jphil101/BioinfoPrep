@@ -22,8 +22,8 @@ def assert_paths(tree, edges, L):
 
 
 def build(run, script, edges):
-    lines, L = tree_sequences(edges)
-    return run(script, str(len(lines)), *lines)["tree"], L
+    lines, _ = tree_sequences(edges)
+    return run(script, str(len(lines)), *lines)["tree"], 1          # distances are mismatch counts, no scaling
 
 
 # ultrametric tree ((A:2,B:2):3,(C:4,D:4):1) -- UPGMA/WPGMA should recover it exactly
@@ -34,9 +34,9 @@ WIKI_NJ = {"a": 2, "b": 3, "c": 4, "d": 2, "e": 1, "ab": 3, "de": 2}
 MOUNT_FM = {"A": 10, "B": 12, "C": 9, "D": 9, "AB": 20}
 
 
-def test_distances_are_p_distances(run):
+def test_distances_are_mismatch_counts(run):
     g = run("upgma.py", "2", "A ACGTACGTAC", "B ACGTACGTTC")
-    assert g["D"]["A", "B"] == pytest.approx(0.1)          # 1 mismatch in 10
+    assert g["D"]["A", "B"] == 1                            # 1 mismatch
 
 
 def test_upgma_ultrametric(run):
@@ -52,8 +52,8 @@ def test_upgma_is_wpgma(run):
     # A,B close; C is 1 away from A,B... D far from C only: WPGMA vs UPGMA differ at the last merge.
     g = run("upgma.py", "4", "A AAAAAAAAAA", "B AAAAAAAAAT", "C AAAAAAATTT", "D TTTTTTTTTT")
     t = g["tree"]
-    # merges: (A,B) h=.05 ; (AB,C) d=(.3+.2)/2=.25 -> h=.125 ; (ABC,D): WPGMA d=((1+.9)/2+.7)/2=.825 -> h=.4125
-    assert t.distance("A") == pytest.approx(0.4125)      # true UPGMA would give (1+.9+.7)/3/2 = .4333
+    # merges: (A,B) h=.5 ; (AB,C) d=(3+2)/2=2.5 -> h=1.25 ; (ABC,D): WPGMA d=((10+9)/2+7)/2=8.25 -> h=4.125
+    assert t.distance("A") == pytest.approx(4.125)       # true UPGMA would give (10+9+7)/3/2 = 4.333
 
 
 def test_nj_wikipedia(run):
@@ -94,6 +94,7 @@ def test_output_shows_distances_and_branch_lengths(run, script):
         assert parsed.distance(x, y) == pytest.approx(tree.distance(x, y), abs=1e-5)
     labels = {t.get_text() for t in plt.gca().texts}                          # plot: every branch labelled
     for c in tree.find_clades():
-        if round(c.branch_length or 0, 3):                                      # zero-length branches stay unlabelled
-            assert str(round(c.branch_length, 3)) in labels
-    assert {"A", "B", "C", "D"} <= {l.strip() for l in labels}                 # leaves labelled
+        if c.branch_length:
+            assert f"{round(c.branch_length, 2):g}" in labels
+    assert {"A", "B", "C", "D"} == {l.strip() for l in labels} - {f"{round(c.branch_length or 0, 2):g}" for c in tree.find_clades()}
+    assert plt.gca().get_yticks().size == 0 and plt.gca().get_ylabel() == ""  # leaf names only, no y-axis clutter
