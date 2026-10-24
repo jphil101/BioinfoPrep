@@ -1,4 +1,7 @@
 import pytest
+import matplotlib.pyplot as plt
+from io import StringIO
+from Bio import Phylo
 from itertools import combinations
 from conftest import tree_sequences
 
@@ -77,3 +80,20 @@ def test_from_sequences(run, script):
     t = run(script, "5", *seqs)["tree"]
     assert sorted(c.name for c in t.get_terminals()) == list("ABCDE")
     assert siblings(t, "A", "B")                          # closest pair grouped
+
+
+@pytest.mark.parametrize("script", ["upgma.py", "neighbor_joining.py", "fitch_margoliash.py"])
+def test_output_shows_distances_and_branch_lengths(run, script):
+    plt.close("all")
+    g = run(script, "4", "A ACGTACGTAC", "B ACGTACGTTC", "C ACGAACGATC", "D TCGAACCATC")
+    tree, printed = g["tree"], g["_printed"]
+    assert str(g["D"]) in printed                                             # distance matrix printed
+    newick = printed.strip().splitlines()[-1]                                  # text tree, with lengths
+    parsed = Phylo.read(StringIO(newick), "newick")
+    for x, y in [("A", "B"), ("A", "D"), ("B", "C")]:
+        assert parsed.distance(x, y) == pytest.approx(tree.distance(x, y), abs=1e-5)
+    labels = {t.get_text() for t in plt.gca().texts}                          # plot: every branch labelled
+    for c in tree.find_clades():
+        if round(c.branch_length or 0, 3):                                      # zero-length branches stay unlabelled
+            assert str(round(c.branch_length, 3)) in labels
+    assert {"A", "B", "C", "D"} <= {l.strip() for l in labels}                 # leaves labelled

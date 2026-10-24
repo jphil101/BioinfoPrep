@@ -1,4 +1,5 @@
-import io, runpy
+import io, os, runpy
+os.environ["MPLBACKEND"] = "Agg"                      # plots render off-screen in tests
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
@@ -9,11 +10,13 @@ ROOT = Path(__file__).parent.parent
 
 @pytest.fixture
 def run():
-    """Run a script as if a user typed `answers` at its input() prompts; return its variables."""
+    """Run a script as if a user typed `answers` at its input() prompts.
+    Returns its variables, plus what it printed under "_printed"."""
     def _run(script, *answers):
-        typed = iter(answers)
-        with mock.patch("builtins.input", lambda prompt="": next(typed)), redirect_stdout(io.StringIO()):
-            return runpy.run_path(str(ROOT / script))
+        typed, out = iter(answers), io.StringIO()
+        with mock.patch("builtins.input", lambda prompt="": next(typed)), redirect_stdout(out):
+            g = runpy.run_path(str(ROOT / script))
+        return {**g, "_printed": out.getvalue()}
     return _run
 
 
