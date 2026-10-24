@@ -21,9 +21,16 @@ def assert_paths(tree, edges, L):
         assert tree.distance(x, y) == pytest.approx(true / L)
 
 
+def named(tree, leaves):
+    """Scripts name sequences Seq1, Seq2, ...; rename to the test's leaf letters."""
+    for c in tree.get_terminals():
+        c.name = leaves[int(c.name[3:]) - 1]
+    return tree
+
+
 def build(run, script, edges):
-    lines, _ = tree_sequences(edges)
-    return run(script, str(len(lines)), *lines)["tree"], 1          # distances are mismatch counts, no scaling
+    seqs, leaves = tree_sequences(edges)
+    return named(run(script, str(len(seqs)), *seqs)["tree"], leaves), 1   # distances are mismatch counts
 
 
 # ultrametric tree ((A:2,B:2):3,(C:4,D:4):1) -- UPGMA/WPGMA should recover it exactly
@@ -35,8 +42,8 @@ MOUNT_FM = {"A": 10, "B": 12, "C": 9, "D": 9, "AB": 20}
 
 
 def test_distances_are_mismatch_counts(run):
-    g = run("upgma.py", "2", "A ACGTACGTAC", "B ACGTACGTTC")
-    assert g["D"]["A", "B"] == 1                            # 1 mismatch
+    g = run("upgma.py", "2", "ACGTACGTAC", "  acgtacgttc ")    # stray spaces / lowercase are fine
+    assert g["D"]["Seq1", "Seq2"] == 1                            # 1 mismatch
 
 
 def test_upgma_ultrametric(run):
@@ -50,8 +57,8 @@ def test_upgma_ultrametric(run):
 def test_upgma_is_wpgma(run):
     # Biopython's upgma averages the 2 merged clusters equally (WPGMA, as taught in class).
     # A,B close; C is 1 away from A,B... D far from C only: WPGMA vs UPGMA differ at the last merge.
-    g = run("upgma.py", "4", "A AAAAAAAAAA", "B AAAAAAAAAT", "C AAAAAAATTT", "D TTTTTTTTTT")
-    t = g["tree"]
+    g = run("upgma.py", "4", "AAAAAAAAAA", "AAAAAAAAAT", "AAAAAAATTT", "TTTTTTTTTT")
+    t = named(g["tree"], "ABCD")
     # merges: (A,B) h=.5 ; (AB,C) d=(3+2)/2=2.5 -> h=1.25 ; (ABC,D): WPGMA d=((10+9)/2+7)/2=8.25 -> h=4.125
     assert t.distance("A") == pytest.approx(4.125)       # true UPGMA would give (10+9+7)/3/2 = 4.333
 
@@ -76,8 +83,8 @@ def test_fitch_five_taxa(run):
 
 @pytest.mark.parametrize("script", ["upgma.py", "neighbor_joining.py", "fitch_margoliash.py"])
 def test_from_sequences(run, script):
-    seqs = ["A ACGTACGTAC", "B ACGTACGTTC", "C ACGAACGATC", "D TCGAACCATC", "E TCGTTCCATG"]
-    t = run(script, "5", *seqs)["tree"]
+    seqs = ["ACGTACGTAC", "ACGTACGTTC", "ACGAACGATC", "TCGAACCATC", "TCGTTCCATG"]
+    t = named(run(script, "5", *seqs)["tree"], "ABCDE")
     assert sorted(c.name for c in t.get_terminals()) == list("ABCDE")
     assert siblings(t, "A", "B")                          # closest pair grouped
 
@@ -85,16 +92,16 @@ def test_from_sequences(run, script):
 @pytest.mark.parametrize("script", ["upgma.py", "neighbor_joining.py", "fitch_margoliash.py"])
 def test_output_shows_distances_and_branch_lengths(run, script):
     plt.close("all")
-    g = run(script, "4", "A ACGTACGTAC", "B ACGTACGTTC", "C ACGAACGATC", "D TCGAACCATC")
+    g = run(script, "4", "ACGTACGTAC", "ACGTACGTTC", "ACGAACGATC", "TCGAACCATC")
     tree, printed = g["tree"], g["_printed"]
     assert str(g["D"]) in printed                                             # distance matrix printed
     newick = printed.strip().splitlines()[-1]                                  # text tree, with lengths
     parsed = Phylo.read(StringIO(newick), "newick")
-    for x, y in [("A", "B"), ("A", "D"), ("B", "C")]:
+    for x, y in [("Seq1", "Seq2"), ("Seq1", "Seq4"), ("Seq2", "Seq3")]:
         assert parsed.distance(x, y) == pytest.approx(tree.distance(x, y), abs=1e-5)
     labels = {t.get_text() for t in plt.gca().texts}                          # plot: every branch labelled
     for c in tree.find_clades():
         if c.branch_length:
             assert f"{round(c.branch_length, 2):g}" in labels
-    assert {"A", "B", "C", "D"} == {l.strip() for l in labels} - {f"{round(c.branch_length or 0, 2):g}" for c in tree.find_clades()}
+    assert {"Seq1", "Seq2", "Seq3", "Seq4"} == {l.strip() for l in labels} - {f"{round(c.branch_length or 0, 2):g}" for c in tree.find_clades()}
     assert plt.gca().get_yticks().size == 0 and plt.gca().get_ylabel() == ""  # leaf names only, no y-axis clutter

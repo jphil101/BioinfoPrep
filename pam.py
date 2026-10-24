@@ -1,7 +1,7 @@
 import numpy as np, pandas as pd
 from itertools import combinations
 
-seqs = [input(f"Sequence {i + 1}: ") for i in range(int(input("How many sequences? ")))]
+seqs = [input(f"Sequence {i + 1}: ").strip().upper() for i in range(int(input("How many sequences? ")))]
 n = int(input("PAM number (e.g. 250): "))
 x, y = zip(*[pair for s, t in combinations(seqs, 2) for pair in zip(s, t)])   # pairs between each PAIR OF SEQUENCES
 q = pd.crosstab(x + y, y + x, normalize=True)              # observed pair freq

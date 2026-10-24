@@ -26,4 +26,4 @@ def tree_sequences(edges, L=40):
     leaves = sorted({n for e in edges for n in e})
     cols = [set(e) for e, k in edges.items() for _ in range(k)]
     cols += [set()] * (L - len(cols))                         # pad with constant sites
-    return [f"{n} {''.join('T' if n in c else 'A' for c in cols)}" for n in leaves], len(cols)
+    return [''.join('T' if n in c else 'A' for c in cols) for n in leaves], leaves
