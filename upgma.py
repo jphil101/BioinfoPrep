@@ -8,5 +8,4 @@ mismatches = lambda s, t: sum(x != y for x, y in zip(s, t))        # distance = 
 D = DistanceMatrix(names, [[mismatches(s, t) for t in seqs[:i + 1]] for i, s in enumerate(seqs)])
 print(D)                                                           # distance matrix
 tree = DistanceTreeConstructor().upgma(D)                          # (Biopython's upgma = WPGMA, as taught)
-print(tree.format("newick"))                                       # tree as text, with branch lengths
 Phylo.draw(tree, branch_labels=lambda c: c.branch_length and round(c.branch_length, 4))
