@@ -3,3 +3,4 @@ numpy
 pandas
 matplotlib
 pytest
+./fitchtree    # until fitchtree is on PyPI; afterwards just: fitchtree

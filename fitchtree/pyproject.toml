@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fitchtree"
+dynamic = ["version"]
+description = "Fitch-Margoliash distance trees for Biopython"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.9"
+authors = [{ name = "jphil101" }]
+keywords = ["phylogenetics", "phylogeny", "fitch-margoliash", "distance tree", "bioinformatics", "biopython"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = ["biopython>=1.79"]
+
+[project.optional-dependencies]
+test = ["pytest", "numpy"]
+
+[project.urls]
+Homepage = "https://github.com/jphil101/BioinfoPrep/tree/main/fitchtree"
+Source = "https://github.com/jphil101/BioinfoPrep/tree/main/fitchtree"
+Issues = "https://github.com/jphil101/BioinfoPrep/issues"
+
+[tool.hatch.version]
+path = "src/fitchtree/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "README.md", "LICENSE"]

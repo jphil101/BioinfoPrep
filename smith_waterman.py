@@ -1,3 +1,6 @@
+try: import Bio
+except ImportError: import os, sys; os.system(f'"{sys.executable}" -m pip install biopython')   # install if missing
+
 from Bio.Align import PairwiseAligner
 
 a = input("Sequence 1: ").strip().upper()

@@ -9,7 +9,10 @@ def leaf_lengths(tree):
 
 
 def siblings(tree, x, y):
-    return {c.name for c in tree.common_ancestor(x, y).get_terminals()} == {x, y}
+    """x, y are neighbours: some branch separates exactly {x, y} from the rest (works rooted or unrooted)."""
+    leaves = {c.name for c in tree.get_terminals()}
+    splits = [{c.name for c in clade.get_terminals()} for clade in tree.find_clades()]
+    return any(s == {x, y} or leaves - s == {x, y} for s in splits)
 
 
 def assert_paths(tree, edges, L):

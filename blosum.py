@@ -1,3 +1,6 @@
+try: import numpy, pandas
+except ImportError: import os, sys; os.system(f'"{sys.executable}" -m pip install numpy pandas')   # install if missing
+
 import numpy as np, pandas as pd
 from itertools import combinations
 
