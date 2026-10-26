@@ -15,4 +15,11 @@ for i, row in enumerate(matrix):
     lower.append(row[:i + 1])
 D = DistanceMatrix(names, lower)
 tree = fitch_margoliash(D)
-Phylo.draw(tree, branch_labels=lambda c: c.branch_length and round(c.branch_length, 4))
+
+
+def branch_label(clade):                                           # text written on each branch
+    if clade.branch_length:                                        # skip the root (None) and zero-length branches
+        return round(clade.branch_length, 4)
+
+
+Phylo.draw(tree, branch_labels=branch_label)

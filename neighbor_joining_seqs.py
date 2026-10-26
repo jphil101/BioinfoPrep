@@ -21,4 +21,11 @@ for i, s in enumerate(seqs):
 D = DistanceMatrix(names, matrix)
 print(D)                                                           # distance matrix
 tree = DistanceTreeConstructor().nj(D)
-Phylo.draw(tree, branch_labels=lambda c: c.branch_length and round(c.branch_length, 4))
+
+
+def branch_label(clade):                                           # text written on each branch
+    if clade.branch_length:                                        # skip the root (None) and zero-length branches
+        return round(clade.branch_length, 4)
+
+
+Phylo.draw(tree, branch_labels=branch_label)
