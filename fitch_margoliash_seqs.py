@@ -7,8 +7,19 @@ from fitchtree import fitch_margoliash
 
 seqs = ["ACGTACGTAC", "ACGTACGTTC", "ACGAACGATC", "TCGAACCATC", "TCGTTCCATG"]   # aligned, same length
 names = [f"Seq{i + 1}" for i in range(len(seqs))]
-mismatches = lambda s, t: sum(x != y for x, y in zip(s, t))        # distance = number of differing sites
-D = DistanceMatrix(names, [[mismatches(s, t) for t in seqs[:i + 1]] for i, s in enumerate(seqs)])
+
+
+def mismatches(s, t):                                              # distance = number of differing sites
+    return sum(x != y for x, y in zip(s, t))
+
+
+matrix = []                                                        # lower triangle of distances
+for i, s in enumerate(seqs):
+    row = []
+    for t in seqs[:i + 1]:
+        row.append(mismatches(s, t))
+    matrix.append(row)
+D = DistanceMatrix(names, matrix)
 print(D)                                                           # distance matrix
 tree = fitch_margoliash(D)
 Phylo.draw(tree, branch_labels=lambda c: c.branch_length and round(c.branch_length, 4))
