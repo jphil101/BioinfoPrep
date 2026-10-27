@@ -4,3 +4,4 @@ pandas
 matplotlib
 pytest
 ./fitchtree    # until fitchtree is on PyPI; afterwards just: fitchtree
+./njswalig     # until njswalig is on PyPI; afterwards just: njswalig
