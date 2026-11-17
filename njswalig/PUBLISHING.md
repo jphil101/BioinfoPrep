@@ -76,6 +76,10 @@ cd njswalig
 python3 -m pip install -e ".[test]" && python3 -m pytest -q     # everything should pass
 ```
 
+If pip says *"editable mode currently requires a setuptools-based build"*, your pip is too old (macOS's
+built-in Python ships pip 21). Upgrade it once with `python3 -m pip install --user --upgrade pip`, then
+run the line again.
+
 1. In `src/njswalig/__init__.py`, change `__version__ = "0.1.0"` to the new number. New features
    bump the middle number (`0.2.0`); a pure bug fix bumps the last (`0.1.1`).
 2. Repeat steps 1 and 3 above (`rm -rf dist`, `python3 -m build`, `python3 -m twine check dist/*`,
