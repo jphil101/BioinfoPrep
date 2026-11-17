@@ -67,6 +67,22 @@ The package is live at https://pypi.org/project/njswalig/ and `pip install njswa
 - **To publish a fix later:** raise `__version__` in `src/njswalig/__init__.py` (e.g. `0.1.1`), then repeat
   steps 1 and 3. PyPI never accepts the same version number twice, even after you delete a release.
 
+## Publishing an update (e.g. 0.1.0 -> 0.2.0)
+
+```bash
+cd "/Users/jphil/Documents/#0 - Mini-Kamikaze/#0 - Bioinfo/CodePrep"
+git pull
+cd njswalig
+python3 -m pip install -e ".[test]" && python3 -m pytest -q     # everything should pass
+```
+
+1. In `src/njswalig/__init__.py`, change `__version__ = "0.1.0"` to the new number. New features
+   bump the middle number (`0.2.0`); a pure bug fix bumps the last (`0.1.1`).
+2. Repeat steps 1 and 3 above (`rm -rf dist`, `python3 -m build`, `python3 -m twine check dist/*`,
+   `python3 -m twine upload dist/*`). Step 2 (TestPyPI) is optional for an update.
+3. Check https://pypi.org/project/njswalig/ shows the new version, then upgrade where you use it:
+   `python3 -m pip install --upgrade njswalig`.
+
 ## Optional: skip typing the token every time
 
 Create `~/.pypirc`:
