@@ -16,7 +16,7 @@ def sw(a, b, *scores):
 
 
 def brute_force(a, b, local, match, mismatch, gap):
-    """Try every way of lining up a and b; return the best ones as (start_i, start_j, row_a, row_b).
+    """Try every way of lining up a and b; return (best score, the best alignments as (start_i, start_j, row_a, row_b)).
     Global: must use both sequences completely, from the start to the end.
     Local:  may start and stop anywhere, but never has a prefix scoring 0 or less (it would start later)."""
     found = []                                                  # (score, start_i, start_j, row_a, row_b)
@@ -41,7 +41,7 @@ def brute_force(a, b, local, match, mismatch, gap):
         extend(i, j, i, j, 0, "", "")
 
     best = max((f[0] for f in found), default=0)
-    return sorted(f[1:] for f in found if f[0] == best)
+    return best, sorted(f[1:] for f in found if f[0] == best)
 
 
 def all_strings(letters, max_length):                           # "", then every string up to max_length
@@ -71,14 +71,20 @@ def test_every_tie_is_reported():
     assert len(sw("ACGT", "TGCA")) == 4
 
 
-def test_traceback_matrix():
-    assert needleman_wunsch("A", "A")[0] == [["", "←"], ["↑", "↖"]]
-    traceback = needleman_wunsch("AC", "GT")[0]
-    assert len(traceback) == 3 and all(len(row) == 3 for row in traceback)      # (len(a)+1) x (len(b)+1)
-    assert traceback[0] == ["", "←", "←"]                                       # global: first row is gaps
-    assert [row[0] for row in traceback] == ["", "↑", "↑"]                      # global: first column is gaps
-    traceback = smith_waterman("AC", "GT")[0]
-    assert traceback == [["", "", ""], ["", "", ""], ["", "", ""]]              # local: nothing matches, no arrows
+def test_score_matrix():
+    # worked by hand with match 1, mismatch -1, gap -2
+    assert needleman_wunsch("AC", "AG")[0] == [[0, -2, -4],
+                                               [-2, 1, -1],
+                                               [-4, -1, 0]]
+    assert smith_waterman("AC", "AG")[0] == [[0, 0, 0],
+                                             [0, 1, 0],
+                                             [0, 0, 0]]
+    scores = needleman_wunsch("ACG", "TT")[0]
+    assert len(scores) == 4 and all(len(row) == 3 for row in scores)           # (len(a)+1) x (len(b)+1)
+    assert scores[0] == [0, -2, -4] and [row[0] for row in scores] == [0, -2, -4, -6]   # global borders: gaps
+    scores = smith_waterman("ACG", "TT")[0]
+    assert scores[0] == [0, 0, 0] and [row[0] for row in scores] == [0, 0, 0, 0]        # local borders: free
+    assert min(min(row) for row in smith_waterman("AAAA", "TTTT")[0]) == 0              # local never goes below 0
 
 
 # ---------------------------------------------------------------- edge cases
@@ -113,9 +119,17 @@ def compare_with_brute_force(strings, schemes):
     for scheme in schemes:
         for a in strings:
             for b in strings:
-                global_alignments = [(0, 0, x, y) for x, y in nw(a, b, *scheme)]       # global always starts at (0, 0)
-                assert global_alignments == brute_force(a, b, False, *scheme), ("NW", a, b, scheme)
-                assert sw(a, b, *scheme) == brute_force(a, b, True, *scheme), ("SW", a, b, scheme)
+                where = (a, b, scheme)
+
+                scores, alignments = needleman_wunsch(a, b, *scheme)
+                best, expected = brute_force(a, b, False, *scheme)
+                assert scores[-1][-1] == best, ("NW score", where)                      # bottom-right = best score
+                assert sorted((0, 0, x, y) for x, y in alignments) == expected, ("NW", where)   # global starts at (0, 0)
+
+                scores, alignments = smith_waterman(a, b, *scheme)
+                best, expected = brute_force(a, b, True, *scheme)
+                assert max(max(row) for row in scores) == best, ("SW score", where)     # highest cell = best score
+                assert sorted(alignments) == expected, ("SW", where)
 
 
 def test_matches_brute_force_on_every_small_input():
