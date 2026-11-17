@@ -1,8 +1,8 @@
-# Hybrid Needleman-Wunsch (global): the matrix is built by hand, then Biopython finds the alignments.
+# Hybrid Needleman-Wunsch (global): the matrix is built by hand, then njswalig traces it back.
 
 # ---------------------------------------------------------------- Part 1: the score matrix (plain Python)
-seq1 = input("Enter the 1st sequence:\t")
-seq2 = input("Enter the 2nd sequence:\t")
+seq1 = input("Enter the 1st sequence:\t").strip().upper()
+seq2 = input("Enter the 2nd sequence:\t").strip().upper()
 match = int(input("Enter the match score:\t"))
 mismatch = int(input("Enter the mismatch score:\t"))
 gap = int(input("Enter the gap penalty:\t"))
@@ -30,44 +30,13 @@ for i in range(1,m):
 		em[i][j] = max(consider)
 
 
-# ---------------------------------------------------------------- Part 2: traceback arrows, read off the matrix
-# An arrow is drawn when (neighbour's score + that move's cost) equals this cell's score; ties give several arrows.
-arrows = [["·"]*n for i in range(m)]
-for i in range(m):
-	for j in range(n):
-		cell = ""
-		if i > 0 and j > 0 and em[i][j] == em[i-1][j-1] + (match if seq1[i-1] == seq2[j-1] else mismatch):
-			cell += "↖"
-		if i > 0 and em[i][j] == em[i-1][j] + gap:
-			cell += "↑"
-		if j > 0 and em[i][j] == em[i][j-1] + gap:
-			cell += "←"
-		arrows[i][j] = cell or "·"
+# ---------------------------------------------------------------- Part 2: njswalig takes over
+# It checks every cell of em, then prints the score matrix, the traceback matrix and every optimal alignment.
+try:
+	from njswalig import njalign		# imported here, not at the top
+	njalign.traceback
+except (ImportError, AttributeError):
+	raise SystemExit("\nNeeds njswalig 0.2.0 or later:  python3 -m pip install --upgrade njswalig")
 
-
-def show(title, matrix):
-	width = max(len(str(cell)) for row in matrix for cell in row) + 1
-	print(f"\n{title}")
-	print("  " + "".join(f"{letter:>{width}}" for letter in "-" + seq2))
-	for letter, row in zip("-" + seq1, matrix):
-		print(f"{letter} " + "".join(f"{cell:>{width}}" for cell in row))
-
-
-show("Score matrix:", em)
-show("Traceback arrows:   ↖ aligned pair   ↑ gap in seq2   ← gap in seq1   · start", arrows)
-
-
-# ---------------------------------------------------------------- Part 3: Biopython takes over
-from Bio.Align import PairwiseAligner		# imported here, not at the top  (pip install biopython)
-
-if not seq1 or not seq2:
-	raise SystemExit("\nBiopython can't align an empty sequence.")
-
-aligner = PairwiseAligner(mode="global", match_score=match, mismatch_score=mismatch, gap_score=gap)
-alignments = aligner.align(seq1, seq2)
-assert alignments.score == em[-1][-1], "the hand-built matrix and Biopython disagree"	# cross-check
-
-print(f"\n{len(alignments)} optimal alignment(s)")
-for number, alignment in enumerate(alignments, 1):
-	print(f"\n#{number}   score {int(alignment.score)}")
-	print(alignment)
+result = njalign.traceback(seq1, seq2, em, [match, mismatch, gap])
+result.show()
