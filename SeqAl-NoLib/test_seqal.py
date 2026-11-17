@@ -1,67 +1,126 @@
-"""Validation for both aligners. Plain asserts, no libraries.  Run: python test_seqal.py  (pytest works too)
+"""Checks for needleman_wunsch.py and smith_waterman.py.    Run:  python test_seqal.py    (pytest works too)
 
-`brute` enumerates every alignment by plain recursion (no DP, no traceback) as an independent oracle.
-Local rule: an alignment starts with a match and no prefix scores <= 0 (else it would just start later).
+No libraries. The big test compares both aligners against `brute_force`, a deliberately naive
+checker that tries EVERY possible alignment instead of filling a score table.
 """
-from needleman_wunsch import needleman_wunsch as nw
-from smith_waterman import smith_waterman as sw
+from needleman_wunsch import needleman_wunsch
+from smith_waterman import smith_waterman
+
+
+def nw(a, b, *scores):                    # just the alignments, sorted so their order never matters
+    return sorted(needleman_wunsch(a, b, *scores)[1])
+
+
+def sw(a, b, *scores):
+    return sorted(smith_waterman(a, b, *scores)[1])
+
+
+def brute_force(a, b, local, match, mismatch, gap):
+    """Try every way of lining up a and b; return the best ones as (start_i, start_j, row_a, row_b).
+    Global: must use both sequences completely, from the start to the end.
+    Local:  may start and stop anywhere, but never has a prefix scoring 0 or less (it would start later)."""
+    found = []                                                  # (score, start_i, start_j, row_a, row_b)
+
+    def extend(start_i, start_j, i, j, score, row_a, row_b):
+        if local and row_a and score <= 0:
+            return
+        if (local and score > 0) or (not local and i == len(a) and j == len(b)):
+            found.append((score, start_i, start_j, row_a, row_b))
+        if i < len(a) and j < len(b):                           # pair a[i] with b[j]
+            pair = match if a[i] == b[j] else mismatch
+            extend(start_i, start_j, i + 1, j + 1, score + pair, row_a + a[i], row_b + b[j])
+        if i < len(a):                                          # a[i] against a gap
+            extend(start_i, start_j, i + 1, j, score + gap, row_a + a[i], row_b + "-")
+        if j < len(b):                                          # gap against b[j]
+            extend(start_i, start_j, i, j + 1, score + gap, row_a + "-", row_b + b[j])
+
+    starts = [(0, 0)]
+    if local:
+        starts = [(i, j) for i in range(len(a) + 1) for j in range(len(b) + 1)]
+    for i, j in starts:
+        extend(i, j, i, j, 0, "", "")
+
+    best = max((f[0] for f in found), default=0)
+    return sorted(f[1:] for f in found if f[0] == best)
+
+
+def all_strings(letters, max_length):                           # "", then every string up to max_length
+    strings = [""]
+    for s in strings:                                           # the list grows while we loop over it
+        if len(s) < max_length:
+            strings += [s + letter for letter in letters]
+    return strings
+
+
+# ---------------------------------------------------------------- known answers
+
+def test_textbook_example():
+    # The Wikipedia example: three alignments tie for the best score (0)
+    assert nw("GATTACA", "GCATGCU", 1, -1, -1) == [
+        ("G-ATTACA", "GCA-TGCU"),
+        ("G-ATTACA", "GCAT-GCU"),
+        ("G-ATTACA", "GCATG-CU")]
+
+
+def test_every_tie_is_reported():
+    # the spare A in "AAA" can be left unmatched in 3 different places
+    assert nw("AAA", "AA", 1, -1, -1) == [("AAA", "-AA"), ("AAA", "A-A"), ("AAA", "AA-")]
+    # "AC" occurs twice in "ACAC": same letters, different places
+    assert sw("ACAC", "AC") == [(0, 0, "AC", "AC"), (2, 0, "AC", "AC")]
+    # four different single-letter hits all score 1
+    assert len(sw("ACGT", "TGCA")) == 4
+
+
+def test_traceback_matrix():
+    assert needleman_wunsch("A", "A")[0] == [["", "←"], ["↑", "↖"]]
+    traceback = needleman_wunsch("AC", "GT")[0]
+    assert len(traceback) == 3 and all(len(row) == 3 for row in traceback)      # (len(a)+1) x (len(b)+1)
+    assert traceback[0] == ["", "←", "←"]                                       # global: first row is gaps
+    assert [row[0] for row in traceback] == ["", "↑", "↑"]                      # global: first column is gaps
+    traceback = smith_waterman("AC", "GT")[0]
+    assert traceback == [["", "", ""], ["", "", ""], ["", "", ""]]              # local: nothing matches, no arrows
+
+
+# ---------------------------------------------------------------- edge cases
+
+def test_empty_sequences():
+    assert nw("", "") == [("", "")]                             # global: the empty alignment
+    assert nw("", "ACG") == [("---", "ACG")]                    # global: everything is a gap
+    assert nw("ACG", "") == [("ACG", "---")]
+    assert sw("", "") == sw("", "ACG") == sw("ACG", "") == []   # local: nothing to align
+
+
+def test_identical_sequences():
+    assert nw("ACGT", "ACGT") == [("ACGT", "ACGT")]
+    assert sw("ACGT", "ACGT") == [(0, 0, "ACGT", "ACGT")]
+
+
+def test_nothing_in_common():
+    assert sw("AAAA", "TTTT") == []                             # local: no positive score, no alignment
+    assert nw("AAAA", "TTTT") == [("AAAA", "TTTT")]             # global still has to align everything
+
+
+def test_region_inside_longer_sequences():
+    assert sw("TTACGTT", "GGACGGG") == [(2, 2, "ACG", "ACG")]   # only the shared ACG is reported
+
+
+# ---------------------------------------------------------------- brute-force comparison
 
 SCHEMES = [(1, -1, -2), (1, -1, -1), (2, -1, -1), (3, -2, -4), (1, 0, 0)]      # (match, mismatch, gap)
 
 
-def brute(a, b, local, match, mismatch, gap):
-    found = []                                                   # (score, start_i, start_j, row_a, row_b)
-
-    def walk(si, sj, i, j, score, x, y):
-        if score > 0 if local else (i, j) == (len(a), len(b)):
-            found.append((score, si, sj, x, y))
-        for di, dj in ((1, 1), (1, 0), (0, 1)):
-            if i + di <= len(a) and j + dj <= len(b):
-                s = score + (gap if not di * dj else match if a[i] == b[j] else mismatch)
-                if not local or s > 0:
-                    walk(si, sj, i + di, j + dj, s, x + (a[i] if di else "-"), y + (b[j] if dj else "-"))
-
-    for si, sj in [(i, j) for i in range(len(a) + 1) for j in range(len(b) + 1)] if local else [(0, 0)]:
-        walk(si, sj, si, sj, 0, "", "")
-    top = max((f[0] for f in found), default=0)
-    return sorted(f[1:] for f in found if f[0] == top)
+def compare_with_brute_force(strings, schemes):
+    for scheme in schemes:
+        for a in strings:
+            for b in strings:
+                global_alignments = [(0, 0, x, y) for x, y in nw(a, b, *scheme)]       # global always starts at (0, 0)
+                assert global_alignments == brute_force(a, b, False, *scheme), ("NW", a, b, scheme)
+                assert sw(a, b, *scheme) == brute_force(a, b, True, *scheme), ("SW", a, b, scheme)
 
 
-def words(alphabet, max_len):                                    # every string of length 0..max_len
-    out = [""]
-    for w in out:                                                # list grows while we loop: breadth-first
-        if len(w) < max_len: out += [w + c for c in alphabet]
-    return out
-
-
-def test_hand_checked():
-    assert nw("A", "A") == ([["", "←"], ["↑", "↖"]], [("A", "A")])
-    assert sorted(nw("AAA", "AA", 1, -1, -1)[1]) == [("AAA", "-AA"), ("AAA", "A-A"), ("AAA", "AA-")]   # 3-way tie
-    assert sorted(nw("GATTACA", "GCATGCU", 1, -1, -1)[1]) == [                                  # textbook: score 0
-        ("G-ATTACA", "GCA-TGCU"), ("G-ATTACA", "GCAT-GCU"), ("G-ATTACA", "GCATG-CU")]
-    assert sorted(sw("ACAC", "AC")[1]) == [(0, 0, "AC", "AC"), (2, 0, "AC", "AC")]              # hit at two places
-
-
-def test_edge_cases():
-    assert nw("", "")[1] == [("", "")] and sw("", "")[1] == []
-    assert nw("", "ACG")[1] == [("---", "ACG")] and nw("ACG", "")[1] == [("ACG", "---")]
-    assert sw("", "ACG")[1] == [] and sw("ACG", "")[1] == []
-    assert nw("ACGT", "ACGT")[1] == [("ACGT", "ACGT")] and sw("ACGT", "ACGT")[1] == [(0, 0, "ACGT", "ACGT")]
-    assert sw("AAAA", "TTTT")[1] == []                           # nothing scores > 0
-    assert len(sw("ACGT", "TGCA")[1]) == 4                       # four single-base hits tie
-    t = nw("AC", "GT")[0]
-    assert [len(r) for r in t] == [3, 3, 3] and t[0] == ["", "←", "←"] and [r[0] for r in t] == ["", "↑", "↑"]
-    t = sw("AC", "GT")[0]
-    assert t[0] == ["", "", ""] and [r[0] for r in t] == ["", "", ""]                           # local borders
-
-
-def test_exhaustive_against_brute_force():
-    for alphabet, length, schemes in (("AB", 4, SCHEMES), ("ACG", 3, SCHEMES[:1])):
-        for scheme in schemes:
-            for a in words(alphabet, length):
-                for b in words(alphabet, length):
-                    assert sorted((0, 0, x, y) for x, y in nw(a, b, *scheme)[1]) == brute(a, b, False, *scheme), (a, b, scheme)
-                    assert sorted(sw(a, b, *scheme)[1]) == brute(a, b, True, *scheme), (a, b, scheme)
+def test_matches_brute_force_on_every_small_input():
+    compare_with_brute_force(all_strings("AB", 4), SCHEMES)         # every pair of strings up to length 4
+    compare_with_brute_force(all_strings("ACG", 3), SCHEMES[:1])    # a 3-letter alphabet, up to length 3
 
 
 if __name__ == "__main__":
