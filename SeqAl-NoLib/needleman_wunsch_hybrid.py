@@ -1,5 +1,8 @@
 # Hybrid Needleman-Wunsch (global): the matrix is built by hand, then njswalig traces it back.
 
+try: import njswalig; njswalig.njalign.traceback
+except (ImportError, AttributeError): import os, sys; os.system(f'"{sys.executable}" -m pip install --upgrade njswalig'); sys.modules.pop("njswalig", None)   # install if missing (or too old to have traceback)
+
 # ---------------------------------------------------------------- Part 1: the score matrix (plain Python)
 seq1 = input("Enter the 1st sequence:\t").strip().upper()
 seq2 = input("Enter the 2nd sequence:\t").strip().upper()
@@ -32,11 +35,7 @@ for i in range(1,m):
 
 # ---------------------------------------------------------------- Part 2: njswalig takes over
 # It checks every cell of em, then prints the score matrix, the traceback matrix and every optimal alignment.
-try:
-	from njswalig import njalign		# imported here, not at the top
-	njalign.traceback
-except (ImportError, AttributeError):
-	raise SystemExit("\nNeeds njswalig 0.2.0 or later:  python3 -m pip install --upgrade njswalig")
+from njswalig import njalign
 
 result = njalign.traceback(seq1, seq2, em, [match, mismatch, gap])
 result.show()
