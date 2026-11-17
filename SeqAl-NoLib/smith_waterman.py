@@ -63,14 +63,15 @@ def show(a, b, scores, alignments):
     for letter, row in zip("-" + a, scores):
         print(f"{letter} " + "".join(f"{value:>{width}}" for value in row))
 
-    print(f"\n{len(alignments)} optimal alignment(s)")
+    score = max(max(row) for row in scores)                    # every optimal alignment has this score
+    print(f"\n{len(alignments)} optimal alignment(s), score {score} each")
     for number, (i, j, row_a, row_b) in enumerate(alignments, 1):
         used_a = row_a.replace("-", "")                        # the letters of a / b this alignment covers
         used_b = row_b.replace("-", "")
         bars = ""                                              # | marks each matching column
         for x, y in zip(row_a, row_b):
             bars += "|" if x == y else " "
-        print(f"\n#{number}   a[{i}:{i + len(used_a)}]   b[{j}:{j + len(used_b)}]\n{row_a}\n{bars}\n{row_b}")
+        print(f"\n#{number}   score {score}   a[{i}:{i + len(used_a)}]   b[{j}:{j + len(used_b)}]\n{row_a}\n{bars}\n{row_b}")
 
 
 if __name__ == "__main__":
